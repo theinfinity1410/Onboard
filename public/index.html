@@ -1,116 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Embedded Signup Test</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Embedded Signup Test</title>
 </head>
-<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
 
-    <h1>Onboard Client (Test)</h1>
-    <p>Click below to launch the Facebook Login flow.</p>
+<body
+  style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
 
-    <!-- Launch button  -->
-    <button onclick="launchWhatsAppSignup()" style="background-color: #1877f2; border: 0; border-radius: 4px; color: #fff; cursor: pointer; font-family: Helvetica, Arial, sans-serif; font-size: 16px; font-weight: bold; height: 40px; padding: 0 24px;">Login with Facebook</button>
+  <h1>Onboard Client (Test)</h1>
+  <p>Click below to launch the Facebook Login flow.</p>
 
-    <div id="status" style="margin-top: 20px; color: #555;"></div>
+  <!-- Launch button  -->
+  <button onclick="launchWhatsAppSignup()"
+    style="background-color: #1877f2; border: 0; border-radius: 4px; color: #fff; cursor: pointer; font-family: Helvetica, Arial, sans-serif; font-size: 16px; font-weight: bold; height: 40px; padding: 0 24px;">Login
+    with Facebook</button>
 
-    <!-- SDK loading -->
-    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+  <div id="status" style="margin-top: 20px; color: #555;"></div>
 
-    <script>
-      let sessionInfo = {};
+  <div id="logs"
+    style="margin-top: 20px; text-align: left; background: #f0f0f0; padding: 10px; border-radius: 4px; width: 80%; max-height: 200px; overflow-y: auto; font-family: monospace;">
+  </div>
 
-      // SDK initialization
-      window.fbAsyncInit = function() {
-        FB.init({
-          appId: '1525473998893477', // user app ID
-          autoLogAppEvents: true,
-          xfbml: true,
-          version: 'v24.0'
-        });
-      };
+  <!-- SDK loading -->
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 
-      // Session logging message event listener
-      window.addEventListener('message', (event) => {
-        if (!event.origin.endsWith('facebook.com')) return;
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'WA_EMBEDDED_SIGNUP') {
-            console.log('message event: ', data);
-            
-            // Capture the IDs from the event
-            if (data.event === 'FINISH') {
-                const { waba_id, phone_number_id } = data.data;
-                sessionInfo.wabaId = waba_id;
-                sessionInfo.phoneNumberId = phone_number_id;
-                document.getElementById('status').innerText = `Captured WABA: ${waba_id}, Phone: ${phone_number_id}. Waiting for code...`;
-            }
+  <script>
+    function logToScreen(msg) {
+      const logDiv = document.getElementById('logs');
+      const p = document.createElement('div');
+      p.innerText = `> ${msg}`;
+      logDiv.appendChild(p);
+      console.log(msg);
+    }
+
+    let sessionInfo = {};
+
+    // SDK initialization
+    window.fbAsyncInit = function () {
+      logToScreen("Initializing Facebook SDK...");
+      FB.init({
+        appId: '1525473998893477', // user app ID
+        autoLogAppEvents: true,
+        xfbml: true,
+        version: 'v24.0'
+      });
+      logToScreen("SDK Initialized.");
+    };
+
+    // Session logging message event listener
+    window.addEventListener('message', (event) => {
+      if (!event.origin.endsWith('facebook.com')) return;
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          logToScreen(`Event Received: ${data.event}`);
+
+          // Capture the IDs from the event
+          if (data.event === 'FINISH') {
+            const { waba_id, phone_number_id } = data.data;
+            sessionInfo.wabaId = waba_id;
+            sessionInfo.phoneNumberId = phone_number_id;
+            document.getElementById('status').innerText = `Captured WABA: ${waba_id}, Phone: ${phone_number_id}. Waiting for code...`;
+            logToScreen("Captured WABA and Phone ID.");
           }
-        } catch {
-          console.log('message event: ', event.data);
+        }
+      } catch {
+        // ignore non-JSON messages
+      }
+    });
+
+    // Response callback
+    const fbLoginCallback = async (response) => {
+      logToScreen("Callback received from Facebook.");
+      if (response.authResponse) {
+        const code = response.authResponse.code;
+        logToScreen(`Code received: ${code.substring(0, 10)}...`);
+
+        if (!sessionInfo.wabaId) {
+          document.getElementById('status').innerText = "Error: Did not capture WABA ID from flow events. Check console.";
+          logToScreen("ERROR: WABA ID missing.");
+          return;
+        }
+
+        document.getElementById('status').innerText = "Code received. Sending to backend...";
+
+        // SEND TO BACKEND
+        try {
+          const res = await fetch('https://localhost:3000/api/onboarding/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: code,
+              wabaId: sessionInfo.wabaId,
+              phoneNumberId: sessionInfo.phoneNumberId,
+              pin: '123456' // Default test PIN
+            })
+          });
+
+          const result = await res.json();
+          logToScreen(`Backend Result: ${result.success}`);
+
+          if (result.success) {
+            document.getElementById('status').innerText = "SUCCESS! Client Onboarded. Check Backend Terminal.";
+            document.body.style.backgroundColor = "#d4edda";
+          } else {
+            document.getElementById('status').innerText = "FAILED: " + result.message;
+            document.body.style.backgroundColor = "#f8d7da";
+          }
+
+        } catch (err) {
+          console.error(err);
+          logToScreen("Network Error calling backend.");
+          document.getElementById('status').innerText = "Network Error calling backend.";
+        }
+
+      } else {
+        logToScreen("User cancelled or failed login.");
+        document.getElementById('status').innerText = "User cancelled or failed login.";
+      }
+    }
+
+    // Launch method and callback registration
+    const launchWhatsAppSignup = () => {
+      logToScreen("Button Clicked. Launching FB.login...");
+      FB.login(fbLoginCallback, {
+        config_id: '686857787698143', // user config ID
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
         }
       });
-
-      // Response callback
-      const fbLoginCallback = async (response) => {
-        if (response.authResponse) {
-          const code = response.authResponse.code;
-          console.log('response code: ', code);
-          
-          if (!sessionInfo.wabaId) {
-              document.getElementById('status').innerText = "Error: Did not capture WABA ID from flow events. Check console.";
-              return;
-          }
-
-          document.getElementById('status').innerText = "Code received. Sending to backend...";
-
-          // SEND TO BACKEND
-          try {
-              const res = await fetch('http://localhost:3000/api/onboarding/complete', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      code: code,
-                      wabaId: sessionInfo.wabaId,
-                      phoneNumberId: sessionInfo.phoneNumberId,
-                      pin: '123456' // Default test PIN
-                  })
-              });
-
-              const result = await res.json();
-              console.log('Backend Result:', result);
-              
-              if (result.success) {
-                  document.getElementById('status').innerText = "SUCCESS! Client Onboarded. Check Backend Terminal.";
-                  document.body.style.backgroundColor = "#d4edda";
-              } else {
-                  document.getElementById('status').innerText = "FAILED: " + result.message;
-                  document.body.style.backgroundColor = "#f8d7da";
-              }
-
-          } catch (err) {
-              console.error(err);
-              document.getElementById('status').innerText = "Network Error calling backend.";
-          }
-
-        } else {
-          console.log('User cancelled login or did not fully authorize.');
-          document.getElementById('status').innerText = "User cancelled or failed login.";
-        }
-      }
-
-      // Launch method and callback registration
-      const launchWhatsAppSignup = () => {
-        FB.login(fbLoginCallback, {
-          config_id: '686857787698143', // user config ID
-          response_type: 'code',
-          override_default_response_type: true,
-          extras: {
-            setup: {},
-          }
-        });
-      }
-    </script>
+    }
+  </script>
 </body>
+
 </html>

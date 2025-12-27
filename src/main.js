@@ -4,10 +4,16 @@ import dotenv from 'dotenv';
 import onboardingRoutes from './routes.js';
 import { errorHandler } from './middleware.js';
 
+import LinkHttps from 'https';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Middleware
 app.use(cors());
@@ -25,7 +31,12 @@ app.get('/health', (req, res) => {
 // Error Handler
 app.use(errorHandler);
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+// Start HTTPS Server
+const sslOptions = {
+    key: fs.readFileSync(path.join(__dirname, 'ssl', 'server.key')),
+    cert: fs.readFileSync(path.join(__dirname, 'ssl', 'server.cert'))
+};
+
+LinkHttps.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`Secure Server is running on https://localhost:${PORT}`);
 });
