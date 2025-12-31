@@ -4,8 +4,6 @@ import dotenv from 'dotenv';
 import onboardingRoutes from './routes.js';
 import { errorHandler } from './middleware.js';
 
-import LinkHttps from 'https';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Serve the frontend
+app.use(express.static('public'));
 
 // Routes
 app.use('/api/onboarding', onboardingRoutes);
@@ -31,12 +29,7 @@ app.get('/health', (req, res) => {
 // Error Handler
 app.use(errorHandler);
 
-// Start HTTPS Server
-const sslOptions = {
-    key: fs.readFileSync(path.join(__dirname, 'ssl', 'server.key')),
-    cert: fs.readFileSync(path.join(__dirname, 'ssl', 'server.cert'))
-};
-
-LinkHttps.createServer(sslOptions, app).listen(PORT, () => {
-    console.log(`Secure Server is running on https://localhost:${PORT}`);
+// Start Server (HTTP)
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
 });
